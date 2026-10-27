@@ -29,12 +29,13 @@ main { max-width: 480px; margin: 0 auto; padding-block: 24px 40px;
   display: grid; gap: 20px; }
 h1 { font-family: var(--display); font-weight: 700; font-size: 1.6rem; letter-spacing: .02em; text-transform: uppercase; margin: 0; }
 label { display: block; font-size: .8rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-.row { display: flex; gap: 10px; }
+.row { display: flex; gap: 10px; align-items: flex-end; }
 .row > div { min-width: 0; }
 input { width: 100%; box-sizing: border-box; font-family: var(--display); font-size: 2rem; font-weight: 500;
   padding: 8px 12px; border: 2px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
 input:focus { outline: none; border-color: var(--tape); }
-#target { width: 5.5rem; }
+#target, #pickets { width: 5.5rem; }
+input::placeholder { color: var(--muted); opacity: .6; }
 .hint { font-size: .85rem; color: var(--muted); margin-top: 6px; }
 .err { color: var(--warn); }
 
@@ -70,8 +71,12 @@ li:last-child .f { font-weight: 700; }
       <label for="target">Target</label>
       <input id="target" value="9" inputmode="decimal" autocomplete="off">
     </div>
+    <div>
+      <label for="pickets">Pickets</label>
+      <input id="pickets" inputmode="numeric" autocomplete="off">
+    </div>
   </div>
-  <div class="hint" id="hint">Inches. Type 86-5/8, 86 5/8, or 86.625.</div>
+  <div class="hint" id="hint">Inches. Type 86-5/8, 86 5/8, or 86.625. Leave Pickets blank to fit the target.</div>
 
   <div id="out">
     <div class="answer">
@@ -106,27 +111,29 @@ function bestDivisor(len, target) {
 
 if (typeof document !== 'undefined') {
   const $ = id => document.getElementById(id);
-  let override = null;
-
   function render() {
     const len = parseInches($('len').value), target = parseInches($('target').value);
-    const ok = len > 0 && target > 0;
+    // Pickets counts both ends, so 6 pickets = 5 spaces. Blank means fit the target.
+    const pk = $('pickets').value.trim(), pickets = /^\d+$/.test(pk) && +pk >= 2 ? +pk : pk ? NaN : null;
+    const ok = len > 0 && target > 0 && !Number.isNaN(pickets);
     $('hint').className = ok ? 'hint' : 'hint err';
-    $('hint').textContent = ok ? 'Inches. Type 86-5/8, 86 5/8, or 86.625.' : 'Can’t read that. Try 86-5/8 or 86.625.';
+    $('hint').textContent = ok ? 'Inches. Type 86-5/8, 86 5/8, or 86.625. Leave Pickets blank to fit the target.'
+      : Number.isNaN(pickets) ? 'Pickets must be a whole number, 2 or more.' : 'Can’t read that. Try 86-5/8 or 86.625.';
     $('out').hidden = $('alts').hidden = $('marks').hidden = !ok;
     if (!ok) return;
 
-    const best = bestDivisor(len, target), n = override || best, sp = len / n;
+    const best = bestDivisor(len, target), n = pickets ? pickets - 1 : best, sp = len / n;
+    $('pickets').placeholder = best + 1;
     $('space').textContent = toFraction(sp) + '″';
-    $('spaceSub').textContent = `${n} spaces · ${sp.toFixed(4)}″ exact`;
+    $('spaceSub').textContent = `${n + 1} pickets · ${n} spaces · ${sp.toFixed(4)}″ exact`;
 
     $('alts').innerHTML = '';
-    for (const k of [best - 1, best, best + 1]) {
+    for (const k of [...new Set([best - 1, best, best + 1, n])].sort((a, b) => a - b)) {
       if (k < 1) continue;
       const b = document.createElement('button');
       b.textContent = `÷${k} = ${toFraction(len / k)}″`;
       b.setAttribute('aria-pressed', k === n);
-      b.onclick = () => { override = k === best ? null : k; render(); };
+      b.onclick = () => { $('pickets').value = k === best ? '' : k + 1; render(); };
       $('alts').append(b);
     }
 
@@ -136,7 +143,7 @@ if (typeof document !== 'undefined') {
       return `<li><span class="n">${i + 1}</span><span class="f">${toFraction(x)}″</span><span class="d">${x.toFixed(3)}</span></li>`;
     }).join('');
   }
-  $('len').oninput = $('target').oninput = () => { override = null; render(); };
+  $('len').oninput = $('target').oninput = $('pickets').oninput = render;
   render();
 }
 </script>
