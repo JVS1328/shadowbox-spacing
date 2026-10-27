@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Shadowbox Spacing</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column — input on top, the spacing up front, then a mark-by-mark tape list. */
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --fg: #1c1b17; --muted: #6b675c;
+  --line: #dedbd1; --tape: #f2c230; --tape-ink: #1c1b17; --warn: #b4441c;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "Barlow", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16150f; --surface: #201f18; --fg: #f1efe6; --muted: #a29d8e;
+  --line: #34322a; --tape: #f2c230; --tape-ink: #16150f; --warn: #f08a5d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16150f; --surface: #201f18; --fg: #f1efe6; --muted: #a29d8e;
+  --line: #34322a; --tape: #f2c230; --tape-ink: #16150f; --warn: #f08a5d; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; }
+main { max-width: 480px; margin: 0 auto; padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.6rem; letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+label { display: block; font-size: .8rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.row { display: flex; gap: 10px; }
+.row > div { min-width: 0; }
+input { width: 100%; box-sizing: border-box; font-family: var(--display); font-size: 2rem; font-weight: 500;
+  padding: 8px 12px; border: 2px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
+input:focus { outline: none; border-color: var(--tape); }
+#target { width: 5.5rem; }
+.hint { font-size: .85rem; color: var(--muted); margin-top: 6px; }
+.err { color: var(--warn); }
+
+.answer { background: var(--tape); color: var(--tape-ink); border-radius: 6px; padding: 16px; display: grid; gap: 4px; }
+.answer .big { font-family: var(--display); font-weight: 700; font-size: 3.4rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.answer .sub { font-size: .95rem; font-weight: 500; }
+.alts { display: flex; gap: 8px; flex-wrap: wrap; }
+.alts button { font: 600 .9rem var(--body); padding: 8px 12px; border-radius: 999px; border: 1.5px solid var(--line);
+  background: var(--surface); color: var(--fg); cursor: pointer; font-variant-numeric: tabular-nums; }
+.alts button[aria-pressed="true"] { border-color: var(--fg); }
+.alts button:focus-visible { outline: 2px solid var(--tape); outline-offset: 2px; }
+
+ol { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--fg); }
+li { display: grid; grid-template-columns: 2.5rem 1fr auto; align-items: baseline; gap: 12px;
+  padding: 10px 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+li .n { font-size: .85rem; color: var(--muted); font-weight: 600; }
+li .f { font-family: var(--display); font-size: 1.6rem; font-weight: 500; }
+li .d { font-size: .85rem; color: var(--muted); }
+li:last-child .f { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Shadowbox Spacing</h1>
+
+  <div class="row">
+    <div style="flex:1">
+      <label for="len">Picket to picket</label>
+      <input id="len" value="86-5/8" autocomplete="off" spellcheck="false">
+    </div>
+    <div>
+      <label for="target">Target</label>
+      <input id="target" value="9" inputmode="decimal" autocomplete="off">
+    </div>
+  </div>
+  <div class="hint" id="hint">Inches. Type 86-5/8, 86 5/8, or 86.625.</div>
+
+  <div id="out">
+    <div class="answer">
+      <div class="big" id="space"></div>
+      <div class="sub" id="spaceSub"></div>
+    </div>
+  </div>
+  <div class="alts" id="alts" aria-label="Other divisions"></div>
+  <ol id="marks"></ol>
+</main>
+
+<script>
+// Parses "86-5/8", "86 5/8", "5/8", "86.625", "86". Returns inches or NaN.
+function parseInches(s) {
+  s = String(s).trim().replace(/["”]|in$/gi, '').trim();
+  let m = s.match(/^(?:(\d+)[\s-]+)?(\d+)\s*\/\s*(\d+)$/);
+  if (m) return m[3] == 0 ? NaN : (+(m[1] || 0)) + m[2] / m[3];
+  return /^\d*\.?\d+$/.test(s) ? parseFloat(s) : NaN;
+}
+// Rounds to nearest 1/16 and reduces: 8.6625 -> "8-11/16".
+function toFraction(x) {
+  let sixteenths = Math.round(x * 16), whole = Math.floor(sixteenths / 16), num = sixteenths % 16, den = 16;
+  if (!num) return String(whole);
+  while (num % 2 === 0) { num /= 2; den /= 2; }
+  return (whole ? whole + '-' : '') + num + '/' + den;
+}
+// Whole-number divisor whose spacing lands closest to target.
+function bestDivisor(len, target) {
+  const lo = Math.max(1, Math.floor(len / target)), hi = lo + 1;
+  return Math.abs(len / lo - target) <= Math.abs(len / hi - target) ? lo : hi;
+}
+
+if (typeof document !== 'undefined') {
+  const $ = id => document.getElementById(id);
+  let override = null;
+
+  function render() {
+    const len = parseInches($('len').value), target = parseInches($('target').value);
+    const ok = len > 0 && target > 0;
+    $('hint').className = ok ? 'hint' : 'hint err';
+    $('hint').textContent = ok ? 'Inches. Type 86-5/8, 86 5/8, or 86.625.' : 'Can’t read that. Try 86-5/8 or 86.625.';
+    $('out').hidden = $('alts').hidden = $('marks').hidden = !ok;
+    if (!ok) return;
+
+    const best = bestDivisor(len, target), n = override || best, sp = len / n;
+    $('space').textContent = toFraction(sp) + '″';
+    $('spaceSub').textContent = `${n} spaces · ${sp.toFixed(4)}″ exact`;
+
+    $('alts').innerHTML = '';
+    for (const k of [best - 1, best, best + 1]) {
+      if (k < 1) continue;
+      const b = document.createElement('button');
+      b.textContent = `÷${k} = ${toFraction(len / k)}″`;
+      b.setAttribute('aria-pressed', k === n);
+      b.onclick = () => { override = k === best ? null : k; render(); };
+      $('alts').append(b);
+    }
+
+    // Each mark is rounded from its exact position, so 1/16 errors don't stack.
+    $('marks').innerHTML = Array.from({ length: n }, (_, i) => {
+      const x = sp * (i + 1);
+      return `<li><span class="n">${i + 1}</span><span class="f">${toFraction(x)}″</span><span class="d">${x.toFixed(3)}</span></li>`;
+    }).join('');
+  }
+  $('len').oninput = $('target').oninput = () => { override = null; render(); };
+  render();
+}
+</script>
+</body>
+</html>
